@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+
+	<head>
+		<meta charset="utf-8">
+
+		<title>Jason's Presentation</title>
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<link rel="stylesheet" href="css/reveal.min.css">
+		<link rel="stylesheet" href="css/theme/default.css" id="theme">
+
+		<!-- For syntax highlighting -->
+		<link rel="stylesheet" href="lib/css/zenburn.css">
+
+		<!-- If the query includes 'print-pdf', use the PDF print sheet -->
+		<script>
+			document.write( '<link rel="stylesheet" href="css/print/' + ( window.location.search.match( /print-pdf/gi ) ? 'pdf' : 'paper' ) + '.css" type="text/css" media="print">' );
+		</script>
+
+		<!--[if lt IE 9]>
+		<script src="lib/js/html5shiv.js"></script>
+		<![endif]-->
+	</head>
+
+	<body>
+
+		<div class="reveal">
+
+			<!-- Any section element inside of this container is displayed as a slide -->
+			<div class="slides">
+				<section>
+					<h2>Your Dev Lane and You</h2>
+					<h5>Proper care and feeding instructions</h3>
+					<p>
+						<small>Jason Bowman</small>
+					</p>
+				</section>
+
+				<section>
+                                  <h2>Access priveleges</h2>
+                                  <p>
+                                    All developers have been granted root access to the dev lanes. Developers should be able to resolve almost any issue on their own, and are encouraged to do so, but do not hesistate to seek support from ops if you are out of your depth or think you might make the situation worse. Worst case scenario we can rebuild the host, although we would like to avoid doing that.
+					</p>
+				</section>
+<section>
+  <h2>Resources</h2>
+  <p> At present the dev lanes are constrained for resources and we are at capacity. They are using as minimal a configuration as is possible. You will probably hit disk limits and performance may at times be less than ideal -- but they are in a functional state.</p>
+</section>
+<section>
+<h2>What does chef do?</h2>
+<p>Chef is a set of rules that defines what an environment should look like. It deploys services and ensures that they are running, validating and preserving system state.</p>
+<br />
+<p>This is not always best for rapid iteration. You will want to disable chef from time to time so that it does not undo your changes.</p>
+</section>
+<section>
+<h2>Manually running chef</h2>
+<pre><code data-trim># sudo chef-client</code></pre>
+<p>It's that easy.</p>
+</section>
+<section>
+<h2>Directory structure</h2>
+<ul>
+        <li>/var/www/refresh_assets - repo: RL-US-Assets maps to /refresh_assets</li>
+        <li>/var/www/html - repo: RL-RefreshAssets maps to /</li>
+        <li>/opt/tomcat/current/webapps/ - deployed webapps, chef copies them from /opt/releases</li>
+        <li>/opt/releases/current/services - standalone jars, contains a subdir with a symlink -- init script runs the symlink</li>
+<pre><code data-trim>
+# ln -sf /path/to/my/jar.jar /opt/releases/current/services/interview.jar
+</code></pre></li>
+</ul>
+</section>
+<section>
+<section>
+<h2>Environments and Databags</h2>
+<p>Every dev lane has a unique environment file and data bags.</p>
+<br />
+<ul>
+  <li>Environment: We use environments to describe databases, sever locations, jvm options, and global properties.</li>
+  <li>Databags: We use databags to describe assets, artifacts, and properties.</li>
+</ul>
+</section>
+<section>
+<h2>Databags</h2>
+<pre><code data-trim>
+data_bags / rlcorp-devX / 
+   lighthouse-assets.json [cms]
+   lighthouse-services.json [cms]
+   lighthouse-webapps.json [cms]
+   properties.json [cms, web] # Do not copy from other environment
+   web-assets.json [web]
+   web-services.json [web]
+   web-webapps.json [web]
+   windows-passwords.json # Don't touch
+   windows-release.json [iis]
+   windows-webconfig.json [iis] # Do not copy other environment
+</code></pre>
+</section>
+</section>
+<section>
+<section>
+<h2>Topology</h2>
+<pre><code data-trim>
+
+rlcorpdevlinweb00X - wwwX.dev.rocketlawyer.com
+   Redis
+   RabbitMQ
+   Tomcat - Frontend web services
+   rlservices - interview-service, featureflipper, etc
+        
+rlcorpdevlincms00X - cmsX.dev.rocketlawyer.com
+   Tomcat - Backend web services, lighthouse
+   rlservices - Standalone services # Ontology Service, integration, etc
+
+rlcrpdevmsrv00X - iis
+   IIS - NET website
+   Windows Components
+</code></pre>
+</section>
+<section>
+<h2>Topology contd.</h2>
+<pre><code data-trim>
+	
+rlcorpdevlincdh00X - [cdh]
+   Elasticsearch
+   Hadoop/Hbase
+   Zookeeper
+
+rlcorpdevlinsql00X - sql
+   MySQL
+
+# Shared single MSSQL instance for all dev lanes
+rlcrpdevmsql001 - mssql
+   MSSQL
+
+# You shouldn't need to touch this host 
+rlcorpdevlinadm001 [adm]
+   Graphite
+</code></pre>
+</section>
+</section>
+<section>
+<section>
+How should I develop then?
+</section>
+<section>
+<h2>Backend</h2>
+<p>Build your feature branch locally and then, locally:</p>
+<pre><code data-trim>
+# scp /path/to/my-version.war user@rlcorpdevlinweb001:/tmp/my-version.war
+</code></pre>
+<p>Then on the dev lane:</p>
+<pre><code data-trim>
+# sudo rm -rf /opt/tomcat/current/webapps/my.war /opt/tomcat/current/webapps/my && mv /tmp/my-version.war /opt/tomcat/current/webapps/my.war
+</code></pre>
+<br />
+<p>
+Tomcat will deploy it under the context of the war's filename.<br />
+Optionally restart tomcat to kill orphaned threads of the undeployed context and free permgen.
+</p>
+</section>
+<section>
+<h2>Frontend</h2>
+Auto pulling of static assets without chef:
+<pre><code data-trim>
+# sudo su - rocketapp
+# cd /var/www/refresh_assets
+# git fetch && git branch features/myfeature
+# crontab -e
+</code></pre>
+Add the following rule:
+<pre><code data-trim>
+*/1 * * * * cd /var/www/refresh_assets/ && git pull
+</code></pre>
+        
+<p>This will cause the host to poll for changes on github every minute.
+</p>
+</section>
+<section>
+<h2>Lighthouse</h2>
+<ul>
+	<li>/opt/resources/cms-data.properties - Configure branch</li>
+	<li>/opt/resources/cms-git/repository - Managed by lighthouse</li>
+	<li>Git reload in lighthouse will load new properties</li>
+</ul>
+</section>
+</section>
+<section>
+<h3>Restoring a dev lane to a particular state</h3>
+Locally, make sure your local repos are up to date.
+<pre><code data-trim>
+# cd ~/OPS-Chef/data_bags/rl-test/ 
+# cp web* lighthouse* windows-release.json ~/OPS-Chef-dev/data_bags/rlcorp-devX/
+# cd ~/OPS-Chef-dev/data_bags/rlcorp-devX/ && git commit -am "Making devX match test"
+# git push
+</code></pre>
+<p>You can kick <a href="http://usordbld001:5555/job/OPS-Chef-dev/">Jenkins</a> for synchronization.<br \>
+It runs automatically every 5 minutes
+</p>        
+<p>Now run chef-client on your web and cms host.
+<pre><code data-trim>
+# ssh -t user@rlcorpdevlinweb001 'sudo chef-client'
+# ssh -t user@rlcorpdevlincms001 'sudo chef-client'
+</code></pre>
+</p>
+</section>
+<section>
+<h3>I ran chef and I got an error!</h3>
+<p>Chef does a series of unit tests when it finishes running. Several of these tests are written with certain assumptions for production. It is likely that one or more unit tests may fail in a preproduction environment due to a restart chef triggered, or similar action. When in doubt run it again -- but everything is [probably] fine.
+</p>
+</section>
+<section>
+<h2>Enabling chef</h2>
+<p>There is a property in your <a href="https://github.com/rocketlawyer/OPS-Chef-dev/blob/master/environments/rlcorp-dev1.rb">environment file</a> that determines if chef runs automatically.</p>
+<pre><code data-trim>
+"chef" => {
+   "auto_check_in" => false,
+   "checkin_interval" => 300
+}
+</code></pre>
+<ul>
+<li>If true, installs a cron job in /etc/cron.d/chef-client when chef-client is run. You must run this everywhere.</li>
+<li>If false, removes the cron job on the next run. You can remove the cron job your self to disable it on just a single node.</li>
+</ul>
+</section>
+<section>
+<section>
+<h2>My dev lane is broken in some way. What should I do?</h2>
+<p>You should attempt to diagnose the problem yourself and fix it if you can. Here are our most common problems.</p>
+</section>
+<section>
+<h2>An artifact won't deploy</h2>
+<p>Deploy a working artifact. Resync to the versions in test.</p>
+</section>
+<section>
+<h2>Debugging Tomcat/500's'</h2>
+<p><a href="http://rlcorpdevlinweb001:8080/probe">Check to see whats failing in probe.</a> Login/pass: tom/cat<br />
+Is tomcat repsponding? What deployed, what failed?<br />
+<br />
+View critical errors that have escaped error handling:
+</p>
+<pre><code data-trim>
+# tail -n1000 /opt/tomcat/current/logs/localhost.`date +%F`.log
+</code></pre>
+        When in doubt, check catalina.out!
+<pre><code data-trim>
+# tail -fn1000 /opt/tomcat/current/logs/catalina.out
+</code></pre>
+IIS... good luck.
+</section>
+<section>
+<h2>Out of permgen</h2>
+<p>Bounce tomcat.</p>
+</section>
+<section>
+<h2>RabbitMQ queues not being consumed</h2>
+        <a href="http://rlcorpdevlinweb001:55672/#/">Check the rabbit console</a> - [guest/guest]<br />
+        Check message queues, are they backing up? Somethings broken and it can help you find out what.
+</section>
+<section>
+	<h2>Data sync issues</h2>
+<p>If you're seeing sql errors, its likely a data sync issue. <a href="https://sites.google.com/a/rocketlawyer.com/operations/dbops/mysql-dev-lanes">Allen wrote up a nice tutorial for doing your own syncs.</a>
+<pre><code data-trim>
+Log in to the database server for your dev lane.
+Run the load data script: # sudo /z/dbscripts/load_data.sh
+Select the source of where you want to pull the data from. [172.21.165.155]
+Choose which database farm you want to pull from. [rl-prod]
+Hit enter for where you want to download the files to. [default: /tmp/]
+admin is the correct user for the dev lanes
+admin123 is the password you will want to use
+localhost is correct so you can hit enter
+More than likely you will not want a backup created type n to skip
+Press enter, you want to preserve lighthouse accounts
+Press enter you do not what to preserver mysql accounts
+Press enter you want to cleanup working files
+Optional. if you want an email when it is done put in your email address, if not just hit enter.
+The script will now start downloading and importing all the databases. Let it go, this can take up to 15 minutes to complete.
+The script will nag you at the end to verify the procs are correct and to run ignite lighthouse to refresh the caches.
+</code></pre>
+</section>
+<section>       
+<h2>Search is broken</h2>
+<p>Your elastic search instance may not have all of the correct schemas loaded and data populated. We do not have a process for automating this yet. At present all dev lanes should have the correct schemas configured, but its likely there will be some drift.</p> 
+</section>
+<section>
+<h2>Out of disk</h2>
+How to check disk usage
+<pre><code data-trim>
+# df -h
+Filesystem            Size  Used Avail Use% Mounted on
+/dev/mapper/VolGroup-lv_root
+                               12G   12G  0M  100% /
+</code></pre>
+The solution is to delete some log files. To check the file system size of a particular directory...
+<pre><code data-trim>
+# du -sh /opt/tomcat/current/logs/
+539M	/opt/tomcat/current/logs/
+# yes | rm -rf /opt/tomcat/current/logs/*
+</code></pre>
+</section>
+<section>
+<h3>The most common culprits are...</h3>
+<pre><code data-trim>
+/opt/tomcat/current/logs [web, cms] + bounce
+        # service tomcat7 restart
+/var/log/rlservices/ [web, cms] + bounce
+        # service rlservices restart
+/var/log/rabbitmq [web] + bounce
+        # service rabbitmq-server restart
+/var/log/hbase [cdh] + bounce
+        # for serv in hbase-master hbase-rest hbase-regionserver hbase-thrift; do service $serv restart; done
+</code></pre>
+
+</section>
+</section>
+<section>
+	<section>
+		<h2>Profiling and debugging</h2>
+		<p>Dev lanes have JPDA enabled on port 8000 for debuggers and JMX for profilers.</p>
+		<p>To use VisualVM you should run jstatd on the host. To do this, you must create a security policy and keep a jstad process running.</p>
+		<p>Create a file named: jstatd.all.policy</p>
+		<pre><code data-trim>
+grant codebase "file:/usr/java/latest/lib/tools.jar" {
+	permission java.security.AllPermission;
+};
+</code></pre>
+<p>And then run:</p>
+<pre><code data-trim>
+# jstatd -J-Djava.security.policy=/home/user/jstatd.all.policy
+</code></pre>
+<p>You should now be able to connect VisualVM to the host.</p>
+
+	</section>
+</section>
+				<section>
+					<h1>Q&A</h1>
+				</section>
+
+			</div>
+
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.min.js"></script>
+
+		<script>
+
+			// Full list of configuration options available here:
+			// https://github.com/hakimel/reveal.js#configuration
+			Reveal.initialize({
+				controls: true,
+				progress: true,
+				history: true,
+				center: true,
+
+				theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+				transition: Reveal.getQueryHash().transition || 'default', // default/cube/page/concave/zoom/linear/fade/none
+
+				// Parallax scrolling
+				// parallaxBackgroundImage: 'https://s3.amazonaws.com/hakim-static/reveal-js/reveal-parallax-1.jpg',
+				// parallaxBackgroundSize: '2100px 900px',
+
+				// Optional libraries used to extend on reveal.js
+				dependencies: [
+					{ src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+					{ src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+					{ src: 'plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+					{ src: 'plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }
+				]
+			});
+
+		</script>
+
+	</body>
+</html>
